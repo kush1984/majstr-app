@@ -5,18 +5,20 @@ import com.majstr.backend.dto.LoginRequest;
 import com.majstr.backend.dto.RegisterRequest;
 import com.majstr.backend.dto.UserResponse;
 import com.majstr.backend.entity.Trade;
+import com.majstr.backend.exception.GlobalExceptionHandler;
 import com.majstr.backend.repository.UserRepository;
 import com.majstr.backend.service.AuthService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -28,26 +30,33 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = AuthController.class)
-@AutoConfigureMockMvc(addFilters = false)
-@ActiveProfiles("test")
-@Import(AuthControllerTest.TestConfig.class)
+/**
+ * Pure-Mockito controller test. Spring Boot 4 removed slice annotations like
+ * @WebMvcTest / @AutoConfigureMockMvc / @MockitoBean usage with slices, so we
+ * wire MockMvc manually with standaloneSetup. Faster and no Spring context needed.
+ */
+@ExtendWith(MockitoExtension.class)
 class AuthControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
+    @Mock
     private AuthService authService;
 
-    @MockitoBean
+    @Mock
     private UserRepository userRepository;
 
-    @org.springframework.boot.test.context.TestConfiguration
-    static class TestConfig {}
+    @InjectMocks
+    private AuthController controller;
+
+    private MockMvc mockMvc;
+    private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void setUp() {
+        objectMapper = JsonMapper.builder().build();
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+    }
 
     @Test
     void register_returns201AndTokens() throws Exception {
@@ -59,8 +68,8 @@ class AuthControllerTest {
                 "+15551234567",
                 "Smith Electrical LLC");
 
-        AuthResponse stubbed = sampleAuthResponse("john@example.com");
-        given(authService.register(any(RegisterRequest.class))).willReturn(stubbed);
+        given(authService.register(any(RegisterRequest.class)))
+                .willReturn(sampleAuthResponse("john@example.com"));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -93,8 +102,8 @@ class AuthControllerTest {
     @Test
     void login_returns200AndTokens() throws Exception {
         LoginRequest req = new LoginRequest("john@example.com", "Sup3r-Secret!");
-        AuthResponse stubbed = sampleAuthResponse("john@example.com");
-        given(authService.login(any(LoginRequest.class))).willReturn(stubbed);
+        given(authService.login(any(LoginRequest.class)))
+                .willReturn(sampleAuthResponse("john@example.com"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

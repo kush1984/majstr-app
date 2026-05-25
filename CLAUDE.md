@@ -172,15 +172,21 @@ the CHECK.
 
 ## Testing
 
-`AuthControllerTest` is a `@WebMvcTest` slice with
-`@AutoConfigureMockMvc(addFilters = false)` (security filters bypassed for
-controller-focused tests) and `@MockitoBean` (Spring 6.2+ replacement for
-the deprecated `@MockBean`). Service-layer / integration tests against a
-real Postgres are not yet wired — when adding them, prefer **Testcontainers**
-over an embedded DB because the migrations are PostgreSQL-specific.
+**Spring Boot 4 removed all test-slice annotations** — `@WebMvcTest`,
+`@AutoConfigureMockMvc`, `@DataJpaTest`, etc. are gone from every jar.
+Tests therefore use one of two patterns:
 
-`application-test.yml` provides a test JWT secret so the
-`@ConfigurationProperties` validation passes.
+1. **Controller tests** (`AuthControllerTest`) — pure Mockito with
+   `@ExtendWith(MockitoExtension.class)` + `@Mock` / `@InjectMocks` +
+   `MockMvcBuilders.standaloneSetup(controller)`. No Spring context, no
+   DB, instant startup. `GlobalExceptionHandler` is registered manually
+   via `.setControllerAdvice(...)` so the error mapping is exercised too.
+2. **Integration tests** (not yet wired) — full `@SpringBootTest` against
+   a **Testcontainers** PostgreSQL. Don't try H2; the Flyway migrations
+   are PostgreSQL-specific.
+
+`application-test.yml` still holds a test JWT secret for the day we add
+an integration slice that loads the real context.
 
 ## Conventions
 
